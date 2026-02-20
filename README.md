@@ -1,4 +1,4 @@
-# spectraf
+﻿# spectraf
 
 **spectraf** es una herramienta de Python para el procesamiento y analisis de imagenes de satelite orientada a exploracion mineral. Permite cargar imagenes Landsat 9, calcular indices espectrales geologicos e integrar datos vectoriales del SGM (Servicio Geologico Mexicano) para identificar automaticamente zonas de interes para exploracion de placeres auriferos.
 
@@ -17,26 +17,27 @@
 
 ### Opcion 1 - conda (recomendado)
 
-\\ash
+```bash
 git clone https://github.com/terraf360/spectraf.git
 cd spectraf
 conda env create -f environment.yml
 conda activate spectraf
-\
+```
 ### Opcion 2 - pip
 
-\\ash
+```bash
 git clone https://github.com/terraf360/spectraf.git
 cd spectraf
 pip install -r requirements.txt
-\
+```
 ---
 
 ## Estructura de datos requerida
 
 Los datos **no estan incluidos en el repositorio** por su tamano. Deben colocarse en la carpeta datos/ dentro del raiz del repo:
 
-\spectraf/
+```text
+spectraf/
 |-- datos/
     |-- landsat9/
     |   |-- LC09_L2SP_XXXXX.../      <- carpeta de la escena descargada de EarthExplorer
@@ -53,7 +54,7 @@ Los datos **no estan incluidos en el repositorio** por su tamano. Deben colocars
                 |-- Litologia_G13_5.shp
                 |-- Geoquimica_G13_5.shp
                 |-- InventariosMineros_G13_5.shp
-\
+```
 | Fuente | URL |
 |--------|-----|
 | Landsat 9 (Level 2 SR) | https://earthexplorer.usgs.gov |
@@ -63,17 +64,18 @@ Los datos **no estan incluidos en el repositorio** por su tamano. Deben colocars
 
 ## Analisis de placeres auriferos (5 fases)
 
-\Fase 1 - Armonizacion      -> Reproyeccion, recorte, rasterizacion de litologia
+```text
+Fase 1 - Armonizacion      -> Reproyeccion, recorte, rasterizacion de litologia
 Fase 2 - Firmas espectrales -> Iron Oxide Ratio + Clay Ratio normalizados 0-1
 Fase 3 - Filtro geologico   -> Mascara litologia favorable + buffer 500 m
 Fase 4 - Integracion AND    -> TARGET si (IOR > umbral) AND (Clay > umbral) AND (favorable)
 Fase 5 - Vectorizacion      -> Morfologia, clustering, GeoJSON + Shapefile
-\
+```
 ### Configuracion
 
 Edita la seccion CONFIGURACION GLOBAL al inicio de examples/analisis_placeres_auriferos.py:
 
-\\python
+```python
 SCENE_ID  = 'LC09_L2SP_031042_20260212_20260213_02_T1'   # <- tu escena
 CARTA_ID  = 'A18022026162831O'                            # <- tu carta SGM
 
@@ -81,30 +83,29 @@ IRON_THRESHOLD     = 0.65   # umbral Iron Oxide Ratio (0-1)
 CLAY_THRESHOLD     = 0.55   # umbral Clay Ratio (0-1)
 PROCESS_DOWNSAMPLE = 4      # 1=full res (lento), 4=aprox 16x mas rapido
 APPLY_BUFFER       = True   # buffer de 500 m en contactos geologicos
-\
+```
 ### Ejecucion
 
-\\ash
+```bash
 conda activate spectraf
 python examples/analisis_placeres_auriferos.py
-\
-### Salidas en 
-esults/
+```
+### Salidas en results/
 
 | Archivo | Descripcion |
 |---------|-------------|
-| ase2_firmas_espectrales.png | Iron Oxide Ratio y Clay Ratio normalizados |
-| ase3_filtro_geologico.png   | Litologia favorable + buffer |
-| ase4_integracion_logica.png | Los 4 criterios y el resultado AND |
-| ase5_targets_finales.png    | Mapa final con targets priorizados |
-| 	argets_exploracion.geojson  | Targets para QGIS / Google Earth |
-| 	argets_exploracion.shp      | Shapefile para ArcGIS / QGIS |
+| fase2_firmas_espectrales.png | Iron Oxide Ratio y Clay Ratio normalizados |
+| fase3_filtro_geologico.png   | Litologia favorable + buffer |
+| fase4_integracion_logica.png | Los 4 criterios y el resultado AND |
+| fase5_targets_finales.png    | Mapa final con targets priorizados |
+| targets_exploracion.geojson  | Targets para QGIS / Google Earth |
+| targets_exploracion.shp      | Shapefile para ArcGIS / QGIS |
 
 ---
 
 ## Uso como libreria
 
-\\python
+```python
 import sys
 from pathlib import Path
 # Si no lo instalaste como paquete, agrega el directorio padre al path:
@@ -129,7 +130,7 @@ ior.show(cmap='YlOrRd')
 # Datos SGM
 litologia = spectraf.load_sgm_litologia('A18022026162831O', data_path=Path('datos'))
 spectraf.overlay_satellite_and_lithology(image, litologia)
-\
+```
 ---
 
 ## Indices espectrales
@@ -156,7 +157,8 @@ spectraf.overlay_satellite_and_lithology(image, litologia)
 
 ## Estructura del proyecto
 
-\spectraf/
+```text
+spectraf/
 |-- environment.yml         # Entorno conda
 |-- requirements.txt        # Dependencias pip
 |-- README.md
@@ -173,7 +175,7 @@ spectraf.overlay_satellite_and_lithology(image, litologia)
 |   |-- ejemplo_uso.py                   # Uso basico
 |-- results/                # Salidas generadas (no versionadas)
 |-- datos/                  # Datos de entrada (no versionados, ver arriba)
-\
+```
 ## Roadmap
 
 - [ ] Soporte para Sentinel-2
