@@ -51,8 +51,8 @@ def load_sgm_litologia(
     
     # Determinar ruta
     if data_path is None:
-        # Asume estructura: terraf/datos/SGM/Carta/...
-        data_path = Path(__file__).parent.parent.parent / 'datos'
+        # Busca datos/ en la raíz del repo: spectraf/src/ → spectraf/ → datos/
+        data_path = Path(__file__).parent.parent / 'datos'
     
     # Ruta al shapefile de litología
     shp_path = data_path / 'SGM' / 'Carta' / carta_id / 'Litologia_G13_5.shp'
@@ -94,7 +94,7 @@ def load_sgm_geoquimica(
         raise ImportError("geopandas es requerido. Instala con: pip install geopandas")
     
     if data_path is None:
-        data_path = Path(__file__).parent.parent.parent / 'datos'
+        data_path = Path(__file__).parent.parent / 'datos'
     
     shp_path = data_path / 'SGM' / 'Carta' / carta_id / 'Geoquimica_G13_5.shp'
     
@@ -133,7 +133,7 @@ def load_sgm_inventarios_mineros(
         raise ImportError("geopandas es requerido. Instala con: pip install geopandas")
     
     if data_path is None:
-        data_path = Path(__file__).parent.parent.parent / 'datos'
+        data_path = Path(__file__).parent.parent / 'datos'
     
     shp_path = data_path / 'SGM' / 'Carta' / carta_id / 'InventariosMineros_G13_5.shp'
     

@@ -24,10 +24,10 @@ Flujo de 5 fases:
       y exportación a GeoJSON + Shapefile.
 
 Uso:
-    python spectraf/examples/analisis_placeres_auriferos.py
+    python examples/analisis_placeres_auriferos.py
 
-Requisitos (ya están en el entorno terraf):
-    rasterio, geopandas, shapely, scipy, matplotlib, numpy
+Requisitos:
+    conda env create -f environment.yml && conda activate spectraf
 """
 
 import sys
@@ -35,18 +35,23 @@ import warnings
 from pathlib import Path
 from typing import List, Tuple
 
+# ─── Configuración de rutas (debe ir antes de los imports locales) ───────────
+#   examples/analisis... → .parent = examples/ → .parent = spectraf/ (raiz repo)
+ROOT = Path(__file__).resolve().parent.parent   # spectraf/
+sys.path.insert(0, str(ROOT.parent))            # añade el directorio padre al path
+
+# ─── Terceros ─────────────────────────────────────────────────────────────────
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import rasterio.transform as riot
 from rasterio.features import rasterize as rio_rasterize
 import geopandas as gpd
 from shapely.geometry import box, Point
 
-# ─── Ruta raíz del proyecto (terraf/) ────────────────────────────────────────
-ROOT = Path(__file__).resolve().parent.parent.parent   # terraf/
-sys.path.insert(0, str(ROOT))                          # permite "import spectraf"
-
+# ─── Locales (spectraf) ───────────────────────────────────────────────────────
 import spectraf.src as spectraf
+from spectraf.src.core import SatelliteImage
 from spectraf.src.visualization import normalize_ratio, normalize_band
 
 # Silenciar divisiones entre cero de los ratios espectrales (comportamiento esperado)
@@ -64,45 +69,64 @@ except ImportError:
         stacklevel=2
     )
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  CONFIGURACIÓN GLOBAL – Modifica aquí para ajustar el análisis
-# ═══════════════════════════════════════════════════════════════════════════════
-SCENE_ID  = 'LC09_L2SP_031042_20260212_20260213_02_T1'
-CARTA_ID  = 'A18022026162831O'
-DATA_PATH = ROOT / 'datos'
-OUTPUT_DIR = ROOT / 'spectraf' / 'results'
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║            ► EMPIEZA AQUÍ – CONFIGURA TUS DATOS Y PARÁMETROS ◄             ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 
-# Fase 4 – umbrales de decisión (valor normalizado 0–1)
+# ─── 1. RUTAS ──────────────────────────────────────────────────────────────────
+#  Pon aqui tus rutas. Por defecto apuntan a spectraf/datos/ y spectraf/results/
+#  Si tienes los datos en otro disco o carpeta, cambia solo estas dos líneas:
+
+DATA_PATH  = ROOT / 'datos'     # <- carpeta que contiene landsat9/ y SGM/
+OUTPUT_DIR = ROOT / 'results'   # <- donde se guardan PNG, GeoJSON y Shapefile
+
+# ─── 2. IDENTIFICADORES DE TU ESCENA Y CARTA ──────────────────────────────────
+#  SCENE_ID: nombre de la carpeta descargada de EarthExplorer (sin extensión)
+#  CARTA_ID: nombre de la carpeta descargada del SGM
+
+SCENE_ID = 'LC09_L2SP_031042_20260212_20260213_02_T1'
+CARTA_ID = 'A18022026162831O'
+
+# ─── 3. UMBRALES ESPECTRALES (Fase 4) ─────────────────────────────────────────
+#  Valor normalizado 0–1. Subir = menos targets (más estricto).
+#                         Bajar = más targets  (más permisivo).
+
 IRON_THRESHOLD = 0.65   # Iron Oxide Ratio mínimo para ser target
 CLAY_THRESHOLD = 0.55   # Clay Ratio mínimo para ser target
 
-# Fase 3 – buffer alrededor de unidades favorables
-APPLY_BUFFER  = True
-BUFFER_DIST   = 500.0   # metros
+# ─── 4. PARÁMETROS DE PROCESAMIENTO ───────────────────────────────────────────
+#  PROCESS_DOWNSAMPLE: 1 = full res (lento), 4 = aprox 16x mas rápido (recomendado)
+#  APPLY_BUFFER      : True crea un área de influencia de BUFFER_DIST metros
 
-# Resolución de procesamiento (1 = full res muy lento, 4 = ~16× más rápido)
-PROCESS_DOWNSAMPLE = 4    # Factor de submuestreo para TODO el análisis interno
+PROCESS_DOWNSAMPLE = 4       # factor de submuestreo para el análisis
+APPLY_BUFFER       = True    # buffer alrededor de unidades favorables
+BUFFER_DIST        = 500.0   # metros
+MORPH_CLOSING_ITER = 2       # iteraciones closing (rellena huecos en Fase 5)
+MORPH_OPENING_ITER = 1       # iteraciones opening (elimina ruido en Fase 5)
+MIN_CLUSTER_PX     = 3       # píxeles mínimos por cluster (a resolución reducida)
 
-# Fase 5 – limpieza morfológica y clustering
-MORPH_CLOSING_ITER = 2    # iteraciones closing (rellena huecos)
-MORPH_OPENING_ITER = 1    # iteraciones opening (elimina ruido)
-MIN_CLUSTER_PX     = 3    # píxeles mínimos a resolución reducida
+# ─── 5. LITOLOGÍA FAVORABLE ────────────────────────────────────────────────────
+#  Substrings a buscar en la columna LITOLOGIA del SGM.
+#  Un polígono es "favorable" si su nombre contiene alguna de estas palabras.
+#  Ajusta según las unidades de tu carta geológica.
 
-# Fase 3 – patrones de litología favorable (substring en la columna LITOLOGIA)
 FAVORABLE_PATTERNS: List[str] = [
-    'Basalto',          # Volcánico básico – fuente Fe/Au
+    'Basalto',          # Volcánico básico  – fuente Fe/Au
     'Ignimbrita',       # Piroclástico silícico – portador de Au
     'Toba',             # Piroclástica – zona de alteración
     'Riolita',          # Félsico – vetas de cuarzo
     'Andesita',         # Volcánico intermedio
-    'Conglomerado',     # Conglomerado – placer potencial
+    'Conglomerado',     # Placer potencial
     'Granito',          # Plutónico – fuente primaria de Au
     'Diorita',          # Plutónico intermedio
-    'Brecha',           # Brecha – canal de mineralización
+    'Brecha',           # Canal de mineralización
     'Cuarzo',           # Veta de cuarzo
     'Arenisca',         # Placer antiguo litificado
 ]
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║           FIN DE LA CONFIGURACIÓN – no necesitas tocar nada más            ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -135,7 +159,6 @@ def downsample_image(image, factor: int):
     """
     if factor <= 1:
         return image
-    import rasterio.transform as riot
     new_bands = {k: v[::factor, ::factor].astype(np.float32)
                  for k, v in image.bands.items()}
     old_t = image.metadata['transform']
@@ -148,7 +171,6 @@ def downsample_image(image, factor: int):
     new_meta['transform'] = new_t
     new_meta['height']    = h
     new_meta['width']     = w
-    from spectraf.src.core import SatelliteImage
     return SatelliteImage(new_bands, new_meta, image.sensor_type)
 
 
@@ -750,6 +772,7 @@ def main():
     print('═' * 78)
 
     # ── Carga de datos base ──────────────────────────────────────────────────
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"\n  Cargando Landsat 9: {SCENE_ID} ...")
     _img_full = spectraf.load_landsat9_image(
         SCENE_ID, DATA_PATH, bands=['B2', 'B3', 'B4', 'B6', 'B7']

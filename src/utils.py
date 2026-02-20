@@ -7,8 +7,8 @@ from typing import Optional
 
 def get_default_data_path() -> Path:
     """Obtiene la ruta por defecto a los datos de satélite."""
-    # Ruta: spectraf/src -> spectraf -> terraf -> datos
-    return Path(__file__).parent.parent.parent / 'datos'
+    # Ruta: spectraf/src/ → spectraf/ → datos/
+    return Path(__file__).parent.parent / 'datos'
 
 
 def find_landsat9_scene(scene_id: str, data_path: Optional[Path] = None) -> Optional[Path]:
